@@ -117,6 +117,9 @@ enum parser_action {
 /* max CSI arguments */
 #define CSI_ARG_MAX 16
 
+/* max OSC string length */
+#define OSC_STR_MAX 1024
+
 /* terminal flags */
 #define FLAG_CURSOR_KEY_MODE			0x00000001 /* DEC cursor key mode */
 #define FLAG_KEYPAD_APPLICATION_MODE		0x00000002 /* DEC keypad application mode; TODO: toggle on numlock? */
@@ -181,6 +184,11 @@ struct tsm_vte {
 	struct vte_saved_state saved_state;
 	unsigned int alt_cursor_x;
 	unsigned int alt_cursor_y;
+
+	tsm_vte_osc_cb osc_callback;
+	void *osc_callback_data;
+	char osc_str[OSC_STR_MAX];
+	unsigned int osc_str_len;
 };
 
 enum vte_color {
@@ -1751,6 +1759,36 @@ static void do_csi(struct tsm_vte *vte, uint32_t data)
 	}
 }
 
+void tsm_vte_set_osc_callback(struct tsm_vte *vte,
+			      tsm_vte_osc_cb cb,
+			      void *data)
+{
+	vte->osc_callback = cb;
+	vte->osc_callback_data = data;
+}
+
+void do_osc_clear(struct tsm_vte *vte) {
+	vte->osc_str_len = 0;
+}
+
+void do_osc_collect(struct tsm_vte *vte, uint32_t data) {
+	if (vte->osc_str_len >= OSC_STR_MAX - 2)
+		return;  /* save space for the null terminator */
+
+	/* only ASCII-encoded strings are supported (non-ASCII strings
+	 * must be escaped) */
+	vte->osc_str[vte->osc_str_len++] = (char)data;
+}
+
+void do_osc_callback(struct tsm_vte *vte) {
+	vte->osc_str[vte->osc_str_len] = '\0';
+
+	if (vte->osc_callback == NULL)
+		return;
+
+	vte->osc_callback(vte->osc_str, vte->osc_callback_data);
+}
+
 /* map a character according to current GL and GR maps */
 static uint32_t vte_map(struct tsm_vte *vte, uint32_t val)
 {
@@ -1818,10 +1856,19 @@ static void do_action(struct tsm_vte *vte, uint32_t data, int action)
 		case ACTION_DCS_END:
 			break;
 		case ACTION_OSC_START:
+      fprintf(stderr, "ACTION_OSC_START\n");
+      do_osc_clear(vte);
 			break;
 		case ACTION_OSC_COLLECT:
+      fprintf(stderr,
+          "ACTION_OSC_COLLECT\n"
+          "    data: %c\n",
+          data);
+      do_osc_collect(vte, data);
 			break;
 		case ACTION_OSC_END:
+      fprintf(stderr, "ACTION_OSC_END\n");
+      do_osc_callback(vte);
 			break;
 		default:
 			llog_warning(vte, "invalid action %d", action);

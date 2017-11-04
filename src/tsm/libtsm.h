@@ -296,6 +296,8 @@ typedef void (*tsm_vte_write_cb) (struct tsm_vte *vte,
 				  const char *u8,
 				  size_t len,
 				  void *data);
+typedef void (*tsm_vte_osc_cb) (char *osc_str,
+				void *data);
 
 int tsm_vte_new(struct tsm_vte **out, struct tsm_screen *con,
 		tsm_vte_write_cb write_cb, void *data,
@@ -312,6 +314,10 @@ void tsm_vte_input(struct tsm_vte *vte, const char *u8, size_t len);
 bool tsm_vte_handle_keyboard(struct tsm_vte *vte, uint32_t keysym,
 			     uint32_t ascii, unsigned int mods,
 			     uint32_t unicode);
+
+void tsm_vte_set_osc_callback(struct tsm_vte *vte,
+			      tsm_vte_osc_cb cb,
+			      void *data);
 
 /** @} */
 
